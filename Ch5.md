@@ -1,7 +1,7 @@
 ---
 title: "Chapter 5"
 author: "Minho Shin"
-date: '`r Sys.Date()`'
+date: '2022-05-02'
 output: 
   html_document: 
     keep_md: true
@@ -9,11 +9,10 @@ output:
     highlight: theme/themes/adam_one_light.theme
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
-```{r load-library, warning=FALSE, message=FALSE}
+
+
+```r
 library(here)
 library(tidyverse)
 # library(brms)
@@ -23,7 +22,8 @@ library(tidyverse)
 
 ## Simulation of discrete probability models
 
-```{r func-simul-height}
+
+```r
 height_sim <- function(N){
   male <- rbinom(N, 1, 0.48)
   height <- ifelse(male==1, rnorm(N, 69.1*2.54, 2.9*2.54), rnorm(N, 63.7*2.54, 2.7*2.54))
@@ -31,21 +31,30 @@ height_sim <- function(N){
 }
 ```
 
-```{r simul-height}
+
+```r
 avg_height <- replicate(1000, height_sim(N=10))
 hist(avg_height, xlab = "Average Height (cm)")
 ```
 
+![](Ch5_files/figure-html/simul-height-1.png)<!-- -->
+
 ## Summarizing a set of simulations using median and median absolute deviation
 
-```{r simul-mad}
+
+```r
 z <- rnorm(1e4, 5, 2)
 cat("mean =", mean(z), ", median =", median(z), ", sd =", sd(z), ", mad sd =", mad(z))
 ```
 
+```
+## mean = 4.997056 , median = 4.992674 , sd = 1.997732 , mad sd = 2.022879
+```
+
 ### Simulate this
 
-```{r func-simul-mad}
+
+```r
 mad_sim <- function(){
   z <- rnorm(1e4, 5, 2)
   mean_med = mean(z) - median(z)
@@ -57,9 +66,17 @@ mad_sim <- function(){
 }
 ```
 
-```{r func-simul-mad-many}
+
+```r
 z_sims <- replicate(1000, mad_sim())
 hist(z_sims[1,], xlab = "Mean - Median")
+```
+
+![](Ch5_files/figure-html/func-simul-mad-many-1.png)<!-- -->
+
+```r
 hist(z_sims[2,], xlab = "SD - MAD SD")
 ```
+
+![](Ch5_files/figure-html/func-simul-mad-many-2.png)<!-- -->
 
