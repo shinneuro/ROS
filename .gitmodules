@@ -1,3 +1,6 @@
 [submodule "Examples"]
 	path = Examples
 	url = https://github.com/avehtari/ROS-Examples
+[submodule "theme"]
+	path = theme
+	url = https://github.com/adamoshen/highlight-demo.git
