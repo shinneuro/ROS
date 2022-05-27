@@ -6,3 +6,6 @@
 
 # ignore cache files
 *_cache
+
+# ignoring imtermediate files
+*.rds
