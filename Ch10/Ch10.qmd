@@ -1,0 +1,377 @@
+---
+format: 
+  revealjs:
+    theme: ["default", "../custom.scss"]
+    margin: 0.15
+    # 5monofont: "JetBrains Mono"
+execute:
+  echo: true
+  cache: true
+fig-align: center
+fig-format: svg
+---
+
+# **ROS Ch. 9-10** {background-color="#17416A"}
+
+
+**Minho Shin**
+
+Ph.D Student<br/>Lab of Cognitive Neuroscience<br/>Department of Brain Sciences<br/>DGIST
+
+## Quick note on git: `git submodule`
+
+<!-- # ```{r image-gh,echo=FALSE, out.width="1%"} -->
+<!-- # knitr::include_graphics("github.png") -->
+<!-- # ``` -->
+
+</br>
+
+:::: {.columns}
+
+::: {.column width="10%"}
+:::
+
+::: {.column width="80%"}
+![](github.png)
+:::
+
+::: {.column width="10%"}
+:::
+
+::::
+
+`Examples` submodule is a `git clone` from [https://github.com/avehtari/ROS-Examples]()
+
+## Load library
+
+Load libraries that are going to be used throughout the two chapters.
+
+```{r load-library}
+library("tidyverse")
+library("brms")
+library("cmdstanr")
+library("posterior")
+options(mc.cores = 4)
+options(brms.backend = "cmdstanr")
+```
+
+# **Ch.9 Prediction and Bayesian inference** {background-color="#17416A"}
+
+## Predicting presidential vote share
+
+```{r load-hibbs}
+hibbs <- here::here("Examples", "ElectionsEconomy", "data", "hibbs.dat") |> 
+  read.table(header = TRUE) |> 
+  as_tibble()
+hibbs
+```
+
+## Fit brms
+
+```{r fit-hibbs1}
+M1 <- brm(
+  vote ~ growth, 
+  data = hibbs,
+  refresh = 0,
+  file = here::here("Ch10", "m1_hibbs.rds")
+  )
+print(M1)
+```
+
+## Prediction and uncertainty
+
+```{r}
+#| echo: false
+#| putput: asis
+tribble(
+  ~Description, ~Math, ~Function,
+  "point prediction", "$\\hat{a} + \\hat{b} x^{new}$", "`predict`",
+  "linear predictor with uncertainty", "$a + b x^{new}$", "`posterior_linpred`",
+  "expected prediction", "$E(y \\vert x^{new})$", "`posterior_epred`",
+  "predictive distribution for a new observation", "$a + b x^{new} + \\textrm{error}$", "`posterior_predict`"
+) |> 
+  knitr::kable()
+```
+
+## Prediction and uncertainty
+
+Let us do this by our own hands.
+
+```{r}
+x_new <- data.frame(growth = 2.0)
+a_hat <- fixef(M1)[1]
+b_hat <- fixef(M1)[2]
+y_point_pred <- a_hat + b_hat*as.numeric(x_new)
+```
+
+First, the point prediction `y_point_pred` is `r round(y_point_pred, 2)`.
+
+However, in `brms`, this is not directly equivalent to the result of `predict`, which is an alias of `posterior_predict`, that outputs
+
+```{r}
+predict(M1, newdata = x_new) |> 
+  round(2)
+```
+
+## Prediction and uncertainty
+
+Next, let's compute linear predictor
+
+```{r}
+sims <- as.matrix(M1)
+a <- sims[,"b_Intercept"]
+b <- sims[,"b_growth"]
+y_linpred <- a + b*as.numeric(x_new)
+```
+
+One thing to be noted here, which I do not clearly understand, is that you get only one number if you use `x_new`, instead of `as.numeric(x_new)`. The correct result should produce the number of predictions that are same as the number of total simulations.
+
+```{r}
+#| echo: false
+hist(y_linpred)
+```
+
+## Prediction and uncertainty
+
+Comparing it with `posterior_linpred`:
+
+```{r}
+hist(y_linpred)
+hist(posterior_linpred(M1, newdata = x_new), col = NULL, border = "red", add = TRUE)
+```
+
+## Prediction and uncertainty
+
+Which is equivalent to `posterior_epred` in linear regression:
+
+```{r}
+hist(y_linpred)
+hist(posterior_linpred(M1, newdata = x_new), col = NULL, border = "red", add = TRUE)
+hist(posterior_epred(M1, newdata = x_new), col = NULL, border = "blue", add = TRUE)
+```
+
+## Prediction and uncertainty
+
+Finally, incorporating estimated uncertainty of the data,
+
+```{r}
+n_sims <- nrow(sims)
+sigma <- sims[,"sigma"]
+y_pred <- a + b*as.numeric(x_new) + rnorm(n_sims, 0, sigma)
+hist(y_pred, breaks = seq(25,75,by=2.5))
+hist(posterior_predict(M1, newdata = x_new), 
+     col = NULL, border = "red", add = TRUE, breaks = seq(25,75,by=2.5))
+```
+
+## Prediction and uncertainty
+
+Let's compare the uncertainty of both prediction, `posterior_linpred` and `posterior_predict`:
+
+```{r}
+hist(y_pred, breaks = seq(25,75,by=2.5), ylim = c(0, 2500))
+hist(posterior_linpred(M1, newdata = x_new), col = NULL, border = "red", add = TRUE,
+     breaks = seq(25,75,by=2.5))
+```
+
+
+## Bayesian synthesis
+
+Let's say the prior estimate of vote share follows $\mathcal{N}(0.524, 0.041)$
+
+```{r}
+#| code-fold: true
+#| fig-width: 12
+prior_plot <- ggplot() +
+  geom_function(
+    fun = dnorm,
+    args = list(mean = 0.524, sd = 0.041),
+    colour = "#66c2a5",
+    size = 1
+  ) +
+  annotate("text", x = 0.6, y = 5, label = "Prior", colour = "#66c2a5", size = 10) +
+  scale_x_continuous(
+    name = expression(theta),
+    limits = c(.38, .68),
+    breaks = c(.4, .5, .6)
+  ) +
+  scale_y_continuous(
+    limits = c(0, 20),
+    expand = expansion(mult = c(0, .1))
+  ) +
+  theme_void() +
+  theme(
+    axis.line.x = element_line(size = .5),
+    axis.ticks.x = element_line(size = .5, colour = "black"),
+    axis.ticks.length.x = unit(7, "points"),
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 20)
+  )
+prior_plot
+```
+
+## Bayesian synthesis
+
+And, the data estimate of vote share follows $\mathcal{N}(0.475, 0.025)$
+
+```{r}
+#| code-fold: true
+#| fig-width: 12
+like_plot <- prior_plot +
+  geom_function(
+    fun = dnorm,
+    args = list(mean = 0.475, sd = 0.025),
+    colour = "#8da0cb",
+    size = 1
+  ) +
+  annotate("text", x = 0.42, y = 10, label = "Likelihood", colour = "#8da0cb", size = 10)
+like_plot
+```
+
+## Bayesian synthesis
+
+Then, the posterior estimate of vote share follows $\mathcal{N}(0.488, 0.021)$
+
+```{r}
+#| code-fold: true
+#| fig-width: 12
+post_plot <- like_plot +
+  geom_function(
+    fun = dnorm,
+    args = list(mean = 0.488, sd = 0.021),
+    colour = "#fc8d62",
+    size = 1
+  ) +
+  annotate("text", x = 0.53, y = 15, label = "Posterior", colour = "#fc8d62", size = 10)
+post_plot
+```
+
+## Bayesian synthesis
+
+Let's do this by ourselves.
+
+```{r}
+#| eval: false
+#| code-line-numbers: "|2,3|4|"
+x <- seq(.35, .7, by = .001)
+prior <- dnorm(x, mean = 0.524, sd = 0.041)
+likelihood <- dnorm(x, mean = 0.475, sd = 0.025)
+posterior <- prior * likelihood / 5 # just for normalization
+post_plot+
+  geom_line(aes(x = x, y = posterior),
+            colour = "deeppink", size = 2) +
+  annotate("text", x = 0.55, y = 17, label = "Prior * Likelihood", 
+           colour = "deeppink", size = 10)
+
+```
+
+## Bayesian synthesis
+
+Let's do this by ourselves.
+
+```{r}
+#| echo: false
+#| fig-width: 12
+x <- seq(.35, .7, by = .001)
+prior <- dnorm(x, mean = 0.524, sd = 0.041)
+likelihood <- dnorm(x, mean = 0.475, sd = 0.025)
+posterior <- prior * likelihood / 5 # just for normalization
+post_plot+
+  geom_line(aes(x = x, y = posterior),
+            colour = "deeppink", size = 2) +
+  annotate("text", x = 0.55, y = 17, label = "Prior * Likelihood", 
+           colour = "deeppink", size = 10)
+
+```
+
+## Product of two Gaussian PDFs
+
+Let $f(x)$ and $g(x)$ be Gaussian PDFs with arbitrary means $\mu_f$ and $\mu_g$ and standard deviations $\sigma_f$ and $\sigma_g$
+
+$$
+f(x) = \frac{1}{\sqrt{2\pi}\sigma_f} e^{- \frac{(x - \mu_f)^2}{2\sigma_f^2}}
+\textrm{ and }
+g(x) = \frac{1}{\sqrt{2\pi}\sigma_g} e^{- \frac{(x - \mu_g)^2}{2\sigma_g^2}}
+$$
+Their product is
+
+$$
+f(x)g(x) = \frac{1}{2\pi\sigma_f\sigma_g} e^{- \left(\frac{(x - \mu_f)^2}{2\sigma_f^2} + \frac{(x - \mu_g)^2}{2\sigma_g^2}\right)}
+$$
+
+::: aside
+Ref: http://www.lucamartino.altervista.org/2003-003.pdf
+:::
+
+## Product of two Gaussian PDFs
+
+Let $S_{fg}$ a scaling factor, $S_{fg} = \frac{1}{\sqrt{2\pi (\sigma_{f}^2 + \sigma_{g}^2)}} \exp \left[- \frac{(\mu_f - \mu_{g})^2}{2 (\sigma_{f}^2 + \sigma_{g}^2)}\right]$
+
+Then, 
+
+$$
+\begin{align}
+f(x)g(x) &= \frac{1}{2\pi\sigma_f\sigma_g} e^{- \left(\frac{(x - \mu_f)^2}{2\sigma_f^2} + \frac{(x - \mu_g)^2}{2\sigma_g^2}\right)} \\
+&= \frac{S_{fg}}{\sqrt{2\pi}\sigma_{fg}} \exp \left[- \frac{(x - \mu_{fg})^2}{2\sigma_{fg}^2}\right]
+\end{align}
+$$
+
+where 
+
+$$
+\sigma_{fg} = \sqrt{\frac{\sigma_f^2 \sigma_g^2}{\sigma_f^2 + \sigma_g^2}}
+\textrm{ and }
+\mu_{fg} = \frac{\mu_f \sigma_g^2 + \mu_g \sigma_f^2}{\sigma_f^2 + \sigma_g^2}
+$$
+
+# **Ch.10 Linear regression with multiple predictors** {background-color="#17416A"}
+
+## Load data
+
+```{r load-kidiq}
+kid_iq <- here::here("Examples", "KidIQ", "data", "kidiq.csv")
+kid_iq <- read_csv(kid_iq)
+kid_iq
+```
+
+## Fit model
+
+```{r fit-model3}
+fit_3 <- brm(
+  kid_score ~ mom_hs + mom_iq, 
+  data=kid_iq,
+  refresh = 0,
+  file = "kid_iq3.rds"
+  )
+print(fit_3)
+```
+
+## Fit model using interaction
+
+```{r fit-model4}
+fit_4 <- brm(
+  kid_score ~ mom_hs*mom_iq, 
+  data=kid_iq,
+  refresh = 0,
+  file = "kid_iq4.rds"
+  )
+print(fit_4)
+```
+
+## Writing the model
+
+The classical linear regression model can bet written as
+
+$$
+y_i = \beta_1 X_{i1} + \cdots + \beta_k X_{ik} + \epsilon_i, \quad \textrm{for } i = 1, \dots, n
+$$
+
+Using multivariate notation, 
+
+$$
+y_i \sim \mathcal{N}(X_i \beta, \sigma^2), \quad \textrm{for } i = 1, \dots, n
+$$
+or in more compact notation,
+
+$$
+y \sim \mathcal{N}(X\beta, \sigma^2 I)
+$$
