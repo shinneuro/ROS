@@ -1,0 +1,15 @@
+/*
+.title-slide h1 {
+  color: #F7F8FA;
+}
+*/
+
+.title-slide h1, .title-slide h2, .title-slide h3 {
+  text-align: left;
+}
+
+/* author, institute, date */
+.title-slide h3{
+  line-height: 1.2em;
+  font-size: 20pt;
+}
