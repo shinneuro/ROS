@@ -1,0 +1,143 @@
+---
+format: 
+  revealjs:
+    theme: ["default", "../custom.scss"]
+    margin: 0.15
+    # 5monofont: "JetBrains Mono"
+execute:
+  echo: true
+  cache: true
+fig-align: center
+fig-format: svg
+---
+
+# **ROS Ch. 11** {background-color="#17416A"}
+
+
+**Minho Shin**
+
+Ph.D Student<br/>Lab of Cognitive Neuroscience<br/>Department of Brain Sciences<br/>DGIST
+
+## Load library
+
+Load libraries that are going to be used throughout the two chapters.
+
+```{r load-library}
+library("tidyverse")
+library("brms")
+library("cmdstanr")
+library("posterior")
+library("patchwork")
+options(mc.cores = 4)
+options(brms.backend = "cmdstanr")
+```
+
+# **Posterior Predictive Checking** {background-color="#17416A"}
+
+## Load newcomb
+
+First, load data
+
+```{r load-newcomb}
+newcomb <- read_csv(here::here("Examples", "Newcomb", "data", "newcomb.txt"))
+newcomb
+```
+
+## Fit brms
+
+```{r fit-nc1}
+M1 <- brm(
+  y ~ 1, 
+  data = newcomb,
+  refresh = 0,
+  file = here::here("Ch11", "m1_newcomb.rds")
+  )
+print(M1)
+```
+
+## `brms::pp_check()`
+
+```{r pp_check}
+pp_check(M1, ndraws = 100)
+```
+
+## `brms::pp_check()`
+
+```{r pp_check-hist}
+pp_check(M1, type = "hist", ndraws = 19)
+```
+
+
+<!-- ```{r} -->
+<!-- pp_M1 <- posterior_predict(M1) -->
+
+<!-- # code from Schad, Betancourt, & Vasishth (2020) -->
+<!-- c_light <- "#DCBCBC"; c_light_highlight <- "#C79999" -->
+<!-- c_mid <- "#B97C7C"; c_mid_highlight <- "#A25050" -->
+<!-- c_dark <- "#8F2727"; c_dark_highlight <- "#7C0000" -->
+
+<!-- nsim <- nrow(pp_M1) -->
+<!-- binwidth <- 5 -->
+<!-- breaks <- seq(min(pp_M1,na.rm=TRUE)-binwidth,max(pp_M1,na.rm=TRUE)+binwidth,binwidth) -->
+<!-- histmat <- matrix(NA,ncol=length(breaks)-1,nrow=nsim) -->
+<!-- for (i in 1:nsim) -->
+<!-- histmat[i,] <- hist(pp_M1[i,],breaks=breaks,plot=FALSE)$counts -->
+
+<!-- # For each bin, compute quantiles across histograms -->
+<!-- probs <- seq(0.1,0.9,0.1) -->
+<!-- quantmat <- as.data.frame(matrix(NA,nrow=dim(histmat)[2],ncol=length(probs))) -->
+<!-- names(quantmat) <- paste0("p",probs) -->
+<!-- for (i in 1:dim(histmat)[2]) -->
+<!-- quantmat[i,] <- quantile(histmat[,i],p=probs) -->
+<!-- quantmat$x <- breaks[2:length(breaks)] - binwidth/2 # add bin mean -->
+
+<!-- # Plot -->
+<!-- FigPri1a <- ggplot(data=quantmat, aes(x=x))+ -->
+<!-- geom_ribbon(aes(ymax=p0.9, ymin=p0.1), fill=c_light) + -->
+<!-- geom_ribbon(aes(ymax=p0.8, ymin=p0.2), fill=c_light_highlight) + -->
+<!-- geom_ribbon(aes(ymax=p0.7, ymin=p0.3), fill=c_mid) + -->
+<!-- geom_ribbon(aes(ymax=p0.6, ymin=p0.4), fill=c_mid_highlight) + -->
+<!-- geom_line(aes(y=p0.5), colour=c_dark, size=1) + -->
+<!-- labs(title="Prior Predictive Distribution", y="", x="Reading Time [ms]") -->
+
+<!-- ``` -->
+
+## PPC using test statistics
+
+```{r pp_check-test}
+stats <- c("min", "mean", "median", "max")
+pp_plots <- map(stats, ~ pp_check(M1, type = "stat", ndraws = 1000, stat = .))
+patchwork::wrap_plots(pp_plots, ncol = 2)
+```
+
+## Cross-Validation
+
+see Aki Vehtari's [Cross-Validation FAQ](https://avehtari.github.io/modelselection/CV-FAQ.html)
+
+![](cv-faq.png)
+
+## More on CV
+
+A posterior predictive distribution
+
+$$
+p(\tilde{y}|y) = \int p(\tilde{y}_i | \theta) p(\theta|y) d\theta
+$$
+
+Expected log pointwise predictive density (elpd)
+
+$$
+\mathrm{elpd} = \sum_{i=1}^n \int p_t (\tilde{y}_i) \log p (\tilde{y}_i | y) d \tilde{y}_i
+$$
+
+Bayesian LOO estimate
+
+$$
+\mathrm{elpd_{loo}} = \sum_{i=1}^n \log p (y_i | y_{-i})
+$$
+
+Using Pareto-smoothed importance sampling (PSIS),
+
+$$
+\widehat{\mathrm{elpd}}_\mathrm{psis-loo} = \sum_{i=1}^n \log \left( \frac{ \sum_{s=1}^S w_i^s p (y_i |\theta^s )}{\sum_{s=1}^S w_i^s} \right)
+$$
