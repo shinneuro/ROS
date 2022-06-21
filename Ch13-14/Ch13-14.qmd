@@ -1,0 +1,406 @@
+---
+format:
+  revealjs:
+    theme: ["default", "../custom.scss"]
+    margin: 0.15
+    monofont: "JetBrains Mono"
+  # gfm:
+  #   keep-yaml: false
+execute:
+  echo: true
+  cache: true
+fig-align: center
+fig-format: svg
+---
+
+# **ROS Ch. 13-14** {background-color="#17416A"}
+
+
+**Minho Shin**
+
+Ph.D Student<br/>Lab of Cognitive Neuroscience<br/>Department of Brain Sciences<br/>DGIST
+
+## Load library
+
+Load libraries that are going to be used throughout the two chapters.
+
+```{r load-library}
+library("brms")
+library("tidyverse")
+library("cmdstanr")
+library("posterior")
+library("patchwork")
+options(mc.cores = 4)
+options(brms.backend = "cmdstanr")
+
+theme_new <- bayesplot::theme_default() + 
+  theme(text = element_text(family = "sans"))
+theme_old <- theme_set(theme_new)
+```
+
+# **ROS Ch. 13 Logistic Regression** {background-color="#17416A"}
+
+## Load NES
+
+First, load data
+
+```{r load-nes}
+nes <- here::here("Examples", "NES", "data", "nes.txt") |> 
+  read.table(header = TRUE) |>
+  as_tibble()
+
+nes92 <- nes |> 
+  drop_na(rvote, dvote) |> 
+  filter(
+    year == 1992,
+    rvote == 1 | dvote == 1
+  )
+```
+
+## Plot data
+
+```{r plot-data}
+nes92 |> 
+  ggplot(aes(x = income, y = rvote)) +
+  geom_jitter(width = .1, height = .1)
+```
+
+
+## Fit logistic regression using `bernoulli`
+
+```{r fit-nes1}
+M1 <- brm(
+  rvote ~ income, 
+  family = bernoulli(link = "logit"),
+  data = nes92,
+  refresh = 0,
+  file = here::here("Ch13-14", "m1_nes.rds")
+  )
+
+print(M1)
+```
+
+## Fit logistic regression using `binomial`
+
+```{r fit-nes2}
+M1_1 <- brm(
+  rvote | trials(1) ~ income, 
+  family = binomial(link = "logit"),
+  data = nes92,
+  refresh = 0,
+  file = here::here("Ch13-14", "m1_1_nes.rds")
+  )
+
+print(M1_1)
+```
+
+## `Bernoulli` and `Binomial`
+
+</br>
+</br>
+
+If we have $n_i$ coins, and each coin has a head probability $p_i$, the number of heads $y_i$ follows the binomial distribution:
+
+$$
+y_i \sim \mathrm{Binomial}(n_i, p_i)
+$$
+
+When $n_i = 1$, this is equivalent to Bernoulli distribution:
+
+$$
+y_i \sim \mathrm{Bernoulli}(p_i)
+$$
+
+## We can print out the actual code in `Stan`
+
+```{r stancode-M1}
+brms::stancode(M1)
+```
+
+## `brms::pp_check()`
+
+```{r pp_check}
+pp_check(M1, ndraws = 100)
+```
+
+## Plot fitted params
+
+```{r fitted-params}
+plot(M1)
+```
+
+## Plot fitted curve using `brms::conditional_effects`
+
+```{r plot-fitted}
+ce_M1 <- conditional_effects(M1, effects = "income")
+
+plot(ce_M1)
+```
+
+## Plot data and prediction together
+
+```{r plot-data-fit}
+nes92 |> 
+  ggplot(aes(x = income, y = rvote)) +
+  geom_jitter(width = .1, height = .1) +
+  ggdist::geom_lineribbon(
+    aes(x = income, y = estimate__, ymin = lower__, ymax = upper__),
+    data = ce_M1$income
+  )
+```
+
+## Visualization of Bayesian inference using `tidybayes` package
+
+![](tidybayes.png)
+
+## Prepare prediction data using `posterior_epred`
+
+```{r p_epred}
+pe <- M1 |> 
+  tidybayes::epred_draws(
+    newdata = tibble(
+      income = seq(-7, 13, .5)
+    )
+  )
+
+print(pe)
+```
+
+## Plot posterior prediction
+
+```{r ppp}
+pe_plot <- pe |>
+  ggplot(aes(x = income, y = .epred)) +
+  tidybayes::stat_lineribbon() +
+  geom_jitter(aes(x = income, y = rvote), data = nes92, width = .15, height = .2) +
+  scale_fill_brewer(palette = "Blues") + 
+  labs(x = "Income", y = "Pr (Republican Vote)",
+       fill = "Credible interval")
+pe_plot
+```
+
+## Using gradient (`R` > 4.2.0)
+
+```{r ppp_grad}
+pe_grad <- pe |>
+  ggplot(aes(x = income, y = .epred)) +
+  tidybayes::stat_lineribbon(
+    aes(fill_ramp = stat(.width)),
+    .width = ppoints(50),
+    fill = "#2171b5"
+  ) +
+  ggdist::scale_fill_ramp_continuous(range = c(1, 0)) +
+  labs(x = "Income", y = "Pr (Republican Vote)") +
+  theme(legend.position = "none")
+pe_grad
+```
+
+## Predict using `posterior_linpred` 
+
+```{r linpred}
+lp <- M1 |> 
+  tidybayes::linpred_draws(
+    newdata = tibble(
+      income = seq(-7, 13, .5)
+    )
+  )
+
+lp_plot <- lp |>
+  ggplot(aes(x = income, y = .linpred)) +
+  tidybayes::stat_lineribbon() +
+  scale_fill_brewer(palette = "Blues") + 
+  labs(x = "Income", y = "logit Pr (Republican Vote)",
+       fill = "Credible interval")
+```
+
+## Predict using `posterior_linpred` 
+
+```{r linpred_plot}
+pe_plot + lp_plot + plot_layout(guides = "collect") &
+  theme(legend.position='bottom')
+```
+
+# **ROS Ch. 14 Working with Logistic Regression** {background-color="#17416A"}
+
+## Marginal Effects
+
+* Average Marginal Effects (AMEs)
+* Marginal Effects at the Mean (MEM)
+* Marginal Effects at Representative values (MERs)
+
+In ROS, **average predicted probability** refers to (average) marginal effects.
+
+::: aside
+Ref: [https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/perraillon_marginal_effects_lecture_lisbon_0.pdf](https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/perraillon_marginal_effects_lecture_lisbon_0.pdf)
+:::
+
+## What does `emmeans` do?
+
+> `emmeans()` estimates marginal effects at the means (MEMs) and not average marginal effects (AMEs). It works wonderfully in the case of linear models with identity link functions, where AMEs and MEMs align.[^longnote]
+
+[^longnote]: [https://discourse.mc-stan.org/t/calculating-average-marginal-effects-in-models-with-random-slopes/24172](https://discourse.mc-stan.org/t/calculating-average-marginal-effects-in-models-with-random-slopes/24172)
+
+
+## Computing numerical derivatives and AME
+
+For a small $h$,
+
+$$
+f'(x) = \lim_{h \rightarrow 0} \frac{f(x+h) - f(x)}{h} \approx \frac{f(x+h) - f(x)}{h}
+$$
+
+AME (for a continuous variable) can be computed by
+
+$$
+\mathbb{E}[f'(x)] \approx \mathbb{E}\left[\frac{f(x+h) - f(x)}{h}\right] = 
+\mathbb{E}\left[\frac{f(x+h)}{h}\right] - \mathbb{E}\left[\frac{f(x)}{h}\right]
+$$
+
+In `R`,
+
+```{r sample-AME, eval=FALSE}
+h <- 1e-3
+
+selected_val <- "X"
+newdata <- mutate(data, {{selected_val}} := !!sym(selected_val) + h)
+predicted_orig <- posterior_epred(model)
+predicted_new <- posterior_epred(model, newdata = newdata)
+
+AME <- rowMeans(predicted_new) / h - rowMeans(predicted_orig) / h
+
+mean(AME, digits=2)
+```
+
+Let's do this with a simple example
+
+## Load arsenic data
+
+```{r load-arsenic}
+wells <- here::here("Examples", "Arsenic", "data", "wells.csv") |> 
+  read_csv()
+```
+
+## Fit arsenic data
+
+```{r fit-arsenic}
+M2 <- brm(
+  switch ~ dist100 + arsenic + educ4,
+  family = bernoulli(link = "logit"),
+  data = wells,
+  refresh = 0,
+  file = here::here("Ch13-14", "m2_arsenic.rds")
+)
+
+print(M2)
+```
+
+## Average predictive comparison
+
+```{r avg-prediction}
+invlogit <- plogis
+b <- fixef(M2)
+hi <- 1
+lo <- 0
+delta <- invlogit(b[1] + b[2]*hi + b[3]*wells$arsenic + b[4]*wells$educ4) - 
+  invlogit(b[1] + b[2]*lo + b[3]*wells$arsenic + b[4]*wells$educ4)
+
+mean(delta)
+```
+
+## Do it by ourselves using `posterior_epred`
+
+```{r diy-ame-text}
+
+dist0 <- mutate(wells, dist100 = 0)
+dist1 <- mutate(wells, dist100 = 1)
+
+pe0 <- M2 |> 
+  fitted(newdata = dist0)
+
+pe1 <- M2 |> 
+  fitted(newdata = dist1)
+  
+mean(pe1[,1] - pe0[,1])
+```
+
+## Compute AME using `posterior_epred`
+
+```{r diy-ame, results='asis'}
+h <- 1e-4
+
+selected_val <- "dist100"
+newwells <- wells |> 
+  mutate({{selected_val}} := !!sym(selected_val) + h)
+
+predicted_orig <- posterior_epred(M2)
+predicted_new <- posterior_epred(M2, newdata = newwells)
+
+AME <- rowMeans(predicted_new) / h - rowMeans(predicted_orig) / h
+
+knitr::kable(posterior_summary(AME))
+```
+
+## Using `marginaleffects`
+
+```{r marginaleffects}
+h <- 1e-3
+
+M2 |> 
+  marginaleffects::marginaleffects(
+    eps = h,
+    variables = "dist100"
+  ) |> 
+  summary()
+```
+
+## Reproducing textbook using `marginaleffects`?
+
+```{r reproduce-me}
+newdata <- M2 |> 
+  marginaleffects::datagrid(
+  dist100 = c(0, 1),
+  grid_type = "counterfactual",
+  model = _
+)
+
+M2 |> 
+  marginaleffects::marginaleffects(
+    newdata = newdata,
+    variables = "dist100"
+  ) |> 
+  summary()
+```
+
+## Using `brmsmargins`
+
+```{r brmsmargins}
+h <- 1e-3
+
+ames <- brmsmargins::brmsmargins(
+  M2,
+  add = data.frame(dist100 = c(0,h)),
+  contrasts = cbind("AME x" = c(-1/h, 1/h)),
+  effects = "fixedonly",
+  CI = .95,
+  CIType = "HDI"
+)
+
+ames$Summary
+```
+
+## Reproducing textbook using `brmsmargins`
+
+```{r reproduce-bm}
+ames2 <- brmsmargins::brmsmargins(
+  M2,
+  newdata = newdata,
+  at = data.frame(dist100 = c(0,1)),
+  contrasts = cbind("AME x" = c(-1, 1)),
+  effects = "fixedonly",
+  CI = .95,
+  CIType = "HDI"
+)
+
+print(ames2$ContrastSummary)
+```
+
