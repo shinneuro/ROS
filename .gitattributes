@@ -1,2 +1,2 @@
 *.html linguist-detectable=false
-**/libs/* linguist-vendored
+libs/** linguist-vendored
