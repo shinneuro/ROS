@@ -1,0 +1,266 @@
+---
+title: "Chapter 1"
+author: "Minho Shin"
+date: '`r Sys.Date()`'
+output: 
+  html_document: 
+    highlight_downlit: TRUE
+    highlight: adam_one_light.theme
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.align = "center"
+  )
+```
+
+```{r load-library, message=FALSE, warning=FALSE}
+library(here)
+library(tidyverse)
+library(brms)
+library(tidybayes)
+options(mc.cores = 4)
+options(brms.backend = "cmdstanr")
+```
+
+## Why learn regression?
+
+#### See data
+
+```{r load-data}
+hibbs <- here("Examples", "ElectionsEconomy", "data", "hibbs.dat") %>%
+  read.table(header = TRUE) %>%
+  as_tibble()
+hibbs
+```
+
+#### Fit brms
+
+```{r fit-brms}
+M1 <- brm(
+  vote ~ growth, 
+  data = hibbs,
+  file = here::here("fits", "ch1", "m1.rds")
+  )
+
+M1
+```
+
+#### Posterior-predictive check
+
+```{r pp-check}
+pp_check(M1, ndraws = 100)
+```
+
+#### Plot
+
+**In base R:**
+
+```{r plot-base, fig.width=5, fig.height=5}
+plot(
+  hibbs$growth, 
+  hibbs$vote, xlab="Average recent growth in personal income",
+  ylab="Incumbent party's vote share"
+)
+abline(coef = fixef(M1)[,1], col = "gray")
+```
+
+**In ggplot:**
+
+```{r plot-ggplot, fig.width=5, fig.height=5}
+
+hibbs %>%
+  ggplot() +
+  geom_text(aes(x = growth, y = vote, label = year)) +
+  labs(
+    x = "Average recent growth in personal income",
+    y = "Incumbent party's vote share"
+  ) +
+  geom_abline(
+    slope = fixef(M1)[2,1],
+    intercept = fixef(M1)[1,1]
+  ) +
+  bayesplot::theme_default()
+
+```
+
+#### Plot with uncertainty
+
+Using the expectation of the posterior predictive,
+
+```{r plot-uncertainty, fig.width=5, fig.height=5}
+
+hibbs %>%
+  modelr::data_grid(growth = modelr::seq_range(growth, n = 51)) %>%
+  tidybayes::add_epred_draws(M1, ndraws = 100) %>%   # sample 100 means from the posterior
+  ggplot(aes(x = growth, y = vote)) +
+  geom_text(aes(x = growth, y = vote, label = year), data = hibbs) +
+  geom_line(aes(x = growth, y = .epred, group = .draw), alpha = .2) +
+  labs(
+    x = "Average recent growth in personal income",
+    y = "Incumbent party's vote share"
+  ) +
+  bayesplot::theme_default()
+```
+
+OR manually,
+
+```{r  plot-uncertainty-manually, fig.width=5, fig.height=5}
+M1 %>%
+  as_draws_df() %>%
+  dplyr::slice_sample(n = 100) %>%
+  ggplot(aes(x = growth, y = vote)) +
+  geom_text(aes(x = growth, y = vote, label = year), data = hibbs) +
+  geom_abline(aes(slope = b_growth, intercept = b_Intercept), alpha = .2) +
+  labs(
+    x = "Average recent growth in personal income",
+    y = "Incumbent party's vote share"
+  ) +
+  bayesplot::theme_default()
+```
+
+## Some examples of regression
+
+#### A randomized experiment on the effect of an educational television program
+
+```{r plot-class, fig.height=3}
+electric_wide <- here("Examples", "ElectricCompany", "data", "electric_wide.txt") %>%
+  read.table(header = TRUE) %>%
+  as_tibble()
+
+electric_long <- electric_wide %>%
+  pivot_longer(
+    cols = contains("posttest"),
+    names_to = "treatment",
+    values_to = "scores"
+  )
+
+# set label
+set_grade <- function(grade) {
+  paste("Grade", grade)
+}
+
+electric_labeller <- labeller(
+  treatment = c(
+    treated_posttest = "Treated\nClasses",
+    control_posttest = "Control\nClasses"
+  ),
+  grade = set_grade
+)
+
+agg_electric <- aggregate(
+  scores ~ treatment + grade,
+  data = electric_long, 
+  mean
+  )
+
+electric_long %>%
+  ggplot() + 
+  geom_histogram(
+    aes(x = scores),
+    binwidth = 5,
+    colour = "black",
+    fill = "grey"
+    ) +
+  geom_vline(
+    aes(xintercept = scores),
+    data = agg_electric,
+    size = 1
+  ) +
+  scale_x_continuous(breaks = c(50, 75, 100)) +
+  facet_grid(
+    treatment ~ grade,
+    switch = "y",
+    labeller = electric_labeller 
+    ) +
+  theme_void() +
+  theme(
+    strip.text.y.left = element_text(angle = 0),
+    strip.placement = "outside",
+    strip.text = element_text(face = "bold", size = 12),
+    axis.text.x = element_text()
+    )
+```
+
+**Original Version**:
+
+```{r plot-base-class}
+
+onlytext <- function(string) {
+  # draw empty box
+  plot(0:1, 0:1, bty = "n", type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "")
+  # draw text in the middle of the plot
+  text(0.5, 0.5, string, cex = 1.2, font = 2)
+}
+
+# set layout of the plot
+nf <- layout(
+  mat = matrix(c(0, 1:14), 3, 5, byrow = FALSE), 
+  widths = c(5, 10, 10, 10, 10), 
+  heights = c(1, 5, 5), 
+  TRUE
+  )
+
+par(mar = c(.2, .2, .2, .2))
+onlytext("Control\nclasses")
+onlytext("Treated\nclasses")
+attach(electric_wide)
+par(mar = c(.2, .4, .2, .4), lwd = .5)
+for (j in 1:4) {
+  # For each grade
+  onlytext(paste("Grade", j))
+  # plot histogram for control posttest result
+  hist(
+    control_posttest[grade == j], 
+    breaks = seq(40, 125, 5), 
+    xaxt = "n", 
+    yaxt = "n", 
+    main = NULL, 
+    col = "gray", 
+    ylim = c(0, 14)
+  )
+  # set axis 
+  axis(
+    side = 1, 
+    seq(50, 100, 25), 
+    line = -.25, 
+    cex.axis = 1, 
+    mgp = c(1, .2, 0), 
+    tck = 0, 
+    lty = "blank"
+  )
+  # draw mean line
+  lines(
+    rep(mean(control_posttest[grade == j]), 2), 
+    c(0, 11), 
+    lwd = 2
+  )
+  # plot histogram for treatment posttest result
+  hist(
+    treated_posttest[grade == j], 
+    breaks = seq(40, 125, 5), 
+    xaxt = "n", 
+    yaxt = "n", 
+    main = NULL, 
+    col = "gray", 
+    ylim = c(0, 14)
+  )
+  # set axis
+  axis(
+    side = 1, seq(50, 100, 25), 
+    line = -.25, 
+    cex.axis = 1, 
+    mgp = c(1, .2, 0), 
+    tck = 0, 
+    lty = "blank"
+  )
+  # draw mean line
+  lines(
+    rep(mean(treated_posttest[grade == j]), 2), 
+    c(0, 11), 
+    lwd = 2
+  )
+}
+```
+
