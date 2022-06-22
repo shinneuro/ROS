@@ -238,6 +238,7 @@ Ref: [https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-
 
 > `emmeans()` estimates marginal effects at the means (MEMs) and not average marginal effects (AMEs). It works wonderfully in the case of linear models with identity link functions, where AMEs and MEMs align.[^longnote]
 
+
 [^longnote]: [https://discourse.mc-stan.org/t/calculating-average-marginal-effects-in-models-with-random-slopes/24172](https://discourse.mc-stan.org/t/calculating-average-marginal-effects-in-models-with-random-slopes/24172)
 
 
@@ -270,6 +271,14 @@ AME <- rowMeans(predicted_new) / h - rowMeans(predicted_orig) / h
 
 mean(AME, digits=2)
 ```
+
+## Computing numerical derivatives and AME
+
+Alternatively, we can use two-sided derivatives,
+
+$$
+f'(x) = \lim_{h \rightarrow 0} \frac{f(x+h) - f(x-h)}{2h} \approx \frac{f(x+h) - f(x-h)}{2h}
+$$
 
 Let's do this with a simple example
 
@@ -374,7 +383,7 @@ M2 |>
 ## Using `brmsmargins`
 
 ```{r brmsmargins}
-h <- 1e-3
+h <- 1e-4
 
 ames <- brmsmargins::brmsmargins(
   M2,
@@ -385,10 +394,28 @@ ames <- brmsmargins::brmsmargins(
   CIType = "HDI"
 )
 
-ames$Summary
+print(ames$Summary)
 ```
 
-## Reproducing textbook using `brmsmargins`
+## Using `brmsmargins` with two-sided derivatives
+
+```{r brmsmargins-twosided}
+h <- 1e-4
+
+ames_two <- brmsmargins::brmsmargins(
+  M2,
+  add = data.frame(dist100 = c(-h,h)),
+  contrasts = cbind("AME x" = c(-1/(2*h), 1/2*h)),
+  effects = "fixedonly",
+  CI = .95,
+  CIType = "HDI"
+)
+
+print(ames_two$Summary)
+```
+
+
+## Reproducing textbook using `brmsmargins`?
 
 ```{r reproduce-bm}
 ames2 <- brmsmargins::brmsmargins(
@@ -404,3 +431,68 @@ ames2 <- brmsmargins::brmsmargins(
 print(ames2$ContrastSummary)
 ```
 
+## Reading materials
+
+* [`marginaleffects` vs. alternative software](https://vincentarelbundock.github.io/marginaleffects/articles/alternative_software.html)
+* ["Marginalia" by Andrew Heiss](https://www.andrewheiss.com/blog/2022/05/20/marginalia/)
+* [`brmsmargins`](https://joshuawiley.com/brmsmargins/index.html)
+* ["Interpreting Model Estimates: Marginal Effects" by Marcelo Coca Perraillon](https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/perraillon_marginal_effects_lecture_lisbon_0.pdf)
+* ["Using Stata’s Margins Command to Estimate and Interpret Adjusted Predictions and Marginal Effects" by Richard Williams](https://www3.nd.edu/~rwilliam/stats/Margins01.pdf)
+
+<!-- ## `emmeans` vs `marginaleffects` in linear model -->
+
+<!-- ```{r} -->
+<!-- lm1 <- lm(len ~ supp*dose, data = ToothGrowth) -->
+
+<!-- emmeans(lm1, specs = ~ supp) |> pairs() -->
+
+<!-- marginaleffects::marginaleffects( -->
+<!--   lm1 -->
+<!-- ) |> summary() -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- (lm2 <- lm(len ~ supp+dose, data = ToothGrowth)) -->
+
+<!-- emmeans(lm2, specs = ~ supp) |> pairs() -->
+
+<!-- marginaleffects::marginaleffects( -->
+<!--   lm2 -->
+<!-- ) |> summary() -->
+<!-- ``` -->
+
+<!-- ## `emmeans` vs `marginaleffects` in logistic regression -->
+
+<!-- ```{r} -->
+<!-- dat <- mtcars -->
+<!-- dat$cyl <- as.factor(dat$cyl) -->
+
+<!-- glm1 <- glm(vs ~ hp + cyl, data = dat, family = binomial) -->
+
+<!-- emmeans(glm1, specs = ~ cyl, regrid = "response") |>  -->
+<!--   contrast(method = "trt.vs.ctrl1") -->
+
+<!-- emtrends(glm1, specs = ~ hp, var = "hp", at = list(cyl = 4)) -->
+
+
+<!-- marginaleffects::marginaleffects( -->
+<!--   glm1, -->
+<!--   newdata = datagrid(cyl = 4) -->
+<!-- ) |> summary() -->
+
+
+<!-- emmeans(glm1, specs = ~ cyl, type = "response") # |> contrast(regrid(_)) -->
+
+<!-- contrast(regrid(glm1)) -->
+
+<!-- marginaleffects::comparisons(glm1, newdata = "mean") -->
+
+<!-- marginaleffects::marginaleffects( -->
+<!--   glm1, -->
+<!--   newdata = "mean" -->
+<!-- ) |> summary() -->
+
+<!-- marginaleffects::marginalmeans( -->
+<!--   glm1 -->
+<!-- ) -->
+<!-- ``` -->

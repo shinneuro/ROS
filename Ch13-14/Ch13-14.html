@@ -728,6 +728,13 @@ f'(x) = \lim_{h \rightarrow 0} \frac{f(x+h) - f(x)}{h} \approx \frac{f(x+h) - f(
 <span id="cb20-9"><a href="#cb20-9"></a></span>
 <span id="cb20-10"><a href="#cb20-10"></a><span class="fu">mean</span>(AME, <span class="at">digits=</span><span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+</section>
+<section id="computing-numerical-derivatives-and-ame-1" class="slide level2">
+<h2>Computing numerical derivatives and AME</h2>
+<p>Alternatively, we can use two-sided derivatives,</p>
+<p><span class="math display">\[
+f'(x) = \lim_{h \rightarrow 0} \frac{f(x+h) - f(x-h)}{2h} \approx \frac{f(x+h) - f(x-h)}{2h}
+\]</span></p>
 <p>Let’s do this with a simple example</p>
 </section>
 <section id="load-arsenic-data" class="slide level2">
@@ -890,8 +897,8 @@ Prediction type:  response </code></pre>
 </section>
 <section id="using-brmsmargins" class="slide level2">
 <h2>Using <code>brmsmargins</code></h2>
-<div class="cell" data-hash="Ch13-14_cache/revealjs/brmsmargins_c83bb6bd7c746a1dcee9247b2cf1843e">
-<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1"></a>h <span class="ot">&lt;-</span> <span class="fl">1e-3</span></span>
+<div class="cell" data-hash="Ch13-14_cache/revealjs/brmsmargins_67567f3cd969639e57716363722b8f7a">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1"></a>h <span class="ot">&lt;-</span> <span class="fl">1e-4</span></span>
 <span id="cb33-2"><a href="#cb33-2"></a></span>
 <span id="cb33-3"><a href="#cb33-3"></a>ames <span class="ot">&lt;-</span> brmsmargins<span class="sc">::</span><span class="fu">brmsmargins</span>(</span>
 <span id="cb33-4"><a href="#cb33-4"></a>  M2,</span>
@@ -902,11 +909,36 @@ Prediction type:  response </code></pre>
 <span id="cb33-9"><a href="#cb33-9"></a>  <span class="at">CIType =</span> <span class="st">"HDI"</span></span>
 <span id="cb33-10"><a href="#cb33-10"></a>)</span>
 <span id="cb33-11"><a href="#cb33-11"></a></span>
-<span id="cb33-12"><a href="#cb33-12"></a>ames<span class="sc">$</span>Summary</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb33-12"><a href="#cb33-12"></a><span class="fu">print</span>(ames<span class="sc">$</span>Summary)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>           M       Mdn        LL        UL PercentROPE PercentMID   CI CIType
 1: 0.5752214 0.5754105 0.5587245 0.5931783          NA         NA 0.95    HDI
-2: 0.5750170 0.5752112 0.5585018 0.5929641          NA         NA 0.95    HDI
+2: 0.5752010 0.5753894 0.5587022 0.5931569          NA         NA 0.95    HDI
+   ROPE  MID
+1: &lt;NA&gt; &lt;NA&gt;
+2: &lt;NA&gt; &lt;NA&gt;</code></pre>
+</div>
+</div>
+</section>
+<section id="using-brmsmargins-with-two-sided-derivatives" class="slide level2">
+<h2>Using <code>brmsmargins</code> with two-sided derivatives</h2>
+<div class="cell" data-hash="Ch13-14_cache/revealjs/brmsmargins-twosided_b31bfc383d5b4c5375a21e472116e983">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1"></a>h <span class="ot">&lt;-</span> <span class="fl">1e-4</span></span>
+<span id="cb35-2"><a href="#cb35-2"></a></span>
+<span id="cb35-3"><a href="#cb35-3"></a>ames_two <span class="ot">&lt;-</span> brmsmargins<span class="sc">::</span><span class="fu">brmsmargins</span>(</span>
+<span id="cb35-4"><a href="#cb35-4"></a>  M2,</span>
+<span id="cb35-5"><a href="#cb35-5"></a>  <span class="at">add =</span> <span class="fu">data.frame</span>(<span class="at">dist100 =</span> <span class="fu">c</span>(<span class="sc">-</span>h,h)),</span>
+<span id="cb35-6"><a href="#cb35-6"></a>  <span class="at">contrasts =</span> <span class="fu">cbind</span>(<span class="st">"AME x"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span><span class="sc">/</span>(<span class="dv">2</span><span class="sc">*</span>h), <span class="dv">1</span><span class="sc">/</span><span class="dv">2</span><span class="sc">*</span>h)),</span>
+<span id="cb35-7"><a href="#cb35-7"></a>  <span class="at">effects =</span> <span class="st">"fixedonly"</span>,</span>
+<span id="cb35-8"><a href="#cb35-8"></a>  <span class="at">CI =</span> .<span class="dv">95</span>,</span>
+<span id="cb35-9"><a href="#cb35-9"></a>  <span class="at">CIType =</span> <span class="st">"HDI"</span></span>
+<span id="cb35-10"><a href="#cb35-10"></a>)</span>
+<span id="cb35-11"><a href="#cb35-11"></a></span>
+<span id="cb35-12"><a href="#cb35-12"></a><span class="fu">print</span>(ames_two<span class="sc">$</span>Summary)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           M       Mdn        LL        UL PercentROPE PercentMID   CI CIType
+1: 0.5752419 0.5754316 0.5587468 0.5931997          NA         NA 0.95    HDI
+2: 0.5752010 0.5753894 0.5587022 0.5931569          NA         NA 0.95    HDI
    ROPE  MID
 1: &lt;NA&gt; &lt;NA&gt;
 2: &lt;NA&gt; &lt;NA&gt;</code></pre>
@@ -914,19 +946,19 @@ Prediction type:  response </code></pre>
 </div>
 </section>
 <section id="reproducing-textbook-using-brmsmargins" class="slide level2">
-<h2>Reproducing textbook using <code>brmsmargins</code></h2>
+<h2>Reproducing textbook using <code>brmsmargins</code>?</h2>
 <div class="cell" data-hash="Ch13-14_cache/revealjs/reproduce-bm_33338a04df84153f84c35f1e4ad2e2c4">
-<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1"></a>ames2 <span class="ot">&lt;-</span> brmsmargins<span class="sc">::</span><span class="fu">brmsmargins</span>(</span>
-<span id="cb35-2"><a href="#cb35-2"></a>  M2,</span>
-<span id="cb35-3"><a href="#cb35-3"></a>  <span class="at">newdata =</span> newdata,</span>
-<span id="cb35-4"><a href="#cb35-4"></a>  <span class="at">at =</span> <span class="fu">data.frame</span>(<span class="at">dist100 =</span> <span class="fu">c</span>(<span class="dv">0</span>,<span class="dv">1</span>)),</span>
-<span id="cb35-5"><a href="#cb35-5"></a>  <span class="at">contrasts =</span> <span class="fu">cbind</span>(<span class="st">"AME x"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>)),</span>
-<span id="cb35-6"><a href="#cb35-6"></a>  <span class="at">effects =</span> <span class="st">"fixedonly"</span>,</span>
-<span id="cb35-7"><a href="#cb35-7"></a>  <span class="at">CI =</span> .<span class="dv">95</span>,</span>
-<span id="cb35-8"><a href="#cb35-8"></a>  <span class="at">CIType =</span> <span class="st">"HDI"</span></span>
-<span id="cb35-9"><a href="#cb35-9"></a>)</span>
-<span id="cb35-10"><a href="#cb35-10"></a></span>
-<span id="cb35-11"><a href="#cb35-11"></a><span class="fu">print</span>(ames2<span class="sc">$</span>ContrastSummary)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1"></a>ames2 <span class="ot">&lt;-</span> brmsmargins<span class="sc">::</span><span class="fu">brmsmargins</span>(</span>
+<span id="cb37-2"><a href="#cb37-2"></a>  M2,</span>
+<span id="cb37-3"><a href="#cb37-3"></a>  <span class="at">newdata =</span> newdata,</span>
+<span id="cb37-4"><a href="#cb37-4"></a>  <span class="at">at =</span> <span class="fu">data.frame</span>(<span class="at">dist100 =</span> <span class="fu">c</span>(<span class="dv">0</span>,<span class="dv">1</span>)),</span>
+<span id="cb37-5"><a href="#cb37-5"></a>  <span class="at">contrasts =</span> <span class="fu">cbind</span>(<span class="st">"AME x"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>)),</span>
+<span id="cb37-6"><a href="#cb37-6"></a>  <span class="at">effects =</span> <span class="st">"fixedonly"</span>,</span>
+<span id="cb37-7"><a href="#cb37-7"></a>  <span class="at">CI =</span> .<span class="dv">95</span>,</span>
+<span id="cb37-8"><a href="#cb37-8"></a>  <span class="at">CIType =</span> <span class="st">"HDI"</span></span>
+<span id="cb37-9"><a href="#cb37-9"></a>)</span>
+<span id="cb37-10"><a href="#cb37-10"></a></span>
+<span id="cb37-11"><a href="#cb37-11"></a><span class="fu">print</span>(ames2<span class="sc">$</span>ContrastSummary)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>            M        Mdn         LL         UL PercentROPE PercentMID   CI
 1: -0.2043279 -0.2048851 -0.2478885 -0.1603878          NA         NA 0.95
@@ -934,6 +966,54 @@ Prediction type:  response </code></pre>
 1:    HDI &lt;NA&gt; &lt;NA&gt; AME x</code></pre>
 </div>
 </div>
+</section>
+<section id="reading-materials" class="slide level2">
+<h2>Reading materials</h2>
+<ul>
+<li><a href="https://vincentarelbundock.github.io/marginaleffects/articles/alternative_software.html"><code>marginaleffects</code> vs.&nbsp;alternative software</a></li>
+<li><a href="https://www.andrewheiss.com/blog/2022/05/20/marginalia/">“Marginalia” by Andrew Heiss</a></li>
+<li><a href="https://joshuawiley.com/brmsmargins/index.html"><code>brmsmargins</code></a></li>
+<li><a href="https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/perraillon_marginal_effects_lecture_lisbon_0.pdf">“Interpreting Model Estimates: Marginal Effects” by Marcelo Coca Perraillon</a></li>
+<li><a href="https://www3.nd.edu/~rwilliam/stats/Margins01.pdf">“Using Stata’s Margins Command to Estimate and Interpret Adjusted Predictions and Marginal Effects” by Richard Williams</a></li>
+</ul>
+<!-- ## `emmeans` vs `marginaleffects` in linear model -->
+<!-- ```{r} -->
+<!-- lm1 <- lm(len ~ supp*dose, data = ToothGrowth) -->
+<!-- emmeans(lm1, specs = ~ supp) |> pairs() -->
+<!-- marginaleffects::marginaleffects( -->
+<!--   lm1 -->
+<!-- ) |> summary() -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- (lm2 <- lm(len ~ supp+dose, data = ToothGrowth)) -->
+<!-- emmeans(lm2, specs = ~ supp) |> pairs() -->
+<!-- marginaleffects::marginaleffects( -->
+<!--   lm2 -->
+<!-- ) |> summary() -->
+<!-- ``` -->
+<!-- ## `emmeans` vs `marginaleffects` in logistic regression -->
+<!-- ```{r} -->
+<!-- dat <- mtcars -->
+<!-- dat$cyl <- as.factor(dat$cyl) -->
+<!-- glm1 <- glm(vs ~ hp + cyl, data = dat, family = binomial) -->
+<!-- emmeans(glm1, specs = ~ cyl, regrid = "response") |>  -->
+<!--   contrast(method = "trt.vs.ctrl1") -->
+<!-- emtrends(glm1, specs = ~ hp, var = "hp", at = list(cyl = 4)) -->
+<!-- marginaleffects::marginaleffects( -->
+<!--   glm1, -->
+<!--   newdata = datagrid(cyl = 4) -->
+<!-- ) |> summary() -->
+<!-- emmeans(glm1, specs = ~ cyl, type = "response") # |> contrast(regrid(_)) -->
+<!-- contrast(regrid(glm1)) -->
+<!-- marginaleffects::comparisons(glm1, newdata = "mean") -->
+<!-- marginaleffects::marginaleffects( -->
+<!--   glm1, -->
+<!--   newdata = "mean" -->
+<!-- ) |> summary() -->
+<!-- marginaleffects::marginalmeans( -->
+<!--   glm1 -->
+<!-- ) -->
+<!-- ``` -->
 <div class="footer footer-default">
 
 </div>
