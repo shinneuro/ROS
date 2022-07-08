@@ -1,0 +1,253 @@
+---
+format:
+  revealjs:
+    theme: ["default", "../custom.scss"]
+    margin: 0.15
+    monofont: "JetBrains Mono"
+    
+fig-align: center
+fig-format: svg
+fig-width: 8
+
+execute:
+  echo: true
+  # cache: true
+---
+
+# **ROS Ch. 15** {background-color="#17416A"}
+
+
+**Minho Shin**
+
+Ph.D Student<br/>Lab of Cognitive Neuroscience<br/>Department of Brain Sciences<br/>DGIST
+
+## Load library
+
+Load libraries that are going to be used throughout the two chapters.
+
+```{r load-library}
+library("brms")
+library("tidyverse")
+library("cmdstanr")
+library("posterior")
+library("patchwork")
+options(mc.cores = 4)
+options(brms.backend = "cmdstanr")
+
+theme_new <- bayesplot::theme_default() + 
+  theme(text = element_text(family = "sans"))
+theme_old <- theme_set(theme_new)
+```
+
+# **ROS Ch. 15 Other generalized linear models** {background-color="#17416A"}
+
+## Poisson distribution
+
+```{r poisson-dist}
+df_pois <- expand_grid(
+  rate = seq(10, 100, 10),
+  x = 1:100
+) |> 
+  mutate(
+    density = dpois(x, rate)
+  )
+
+df_pois |> 
+  mutate(rate = factor(rate)) |> 
+  ggplot() + 
+  geom_line(aes(x = x, y = density, colour = rate))
+```
+
+
+## Load Roaches
+
+First, load data
+
+```{r load-roaches}
+roaches <- here::here("Examples", "Roaches", "data", "roaches.csv") |> 
+  read_csv() |>
+  select(-1)
+```
+
+## Plot data
+
+```{r plot-data}
+# y: # roaches caught in a set of traps
+# roach1: pre-treatment roach level
+# treatment: indicator of pest management
+# senior: whether the building is restricted to the elderly
+
+roaches |> 
+  ggplot() +
+  geom_histogram(
+    aes(x = roach1, fill = factor(treatment)),
+    position = "identity",
+    colour = NA,
+    alpha = .5,
+    binwidth = 10
+  )
+```
+
+## Fit negative binomial model in `brms`
+
+```{r fit-roaches}
+roaches$roach100 <- roaches$roach1/100
+
+M1 <- brm(
+  y ~ roach100 + treatment + senior + offset(log(exposure2)), 
+  family = negbinomial(link = "log"),
+  data = roaches,
+  refresh = 0,
+  file = here::here("Ch15", "m1_roaches.rds")
+  )
+
+print(M1)
+```
+
+## Offset?
+
+![](poisson_offset.png){width="80%"}
+
+::: aside
+Ref: [https://stats.stackexchange.com/questions/11182/when-to-use-an-offset-in-a-poisson-regression](https://stats.stackexchange.com/questions/11182/when-to-use-an-offset-in-a-poisson-regression)
+:::
+
+## `brms::pp_check()` is not useful when changing scales
+
+```{r pp_check-1}
+pp_check(M1, ndraws = 100)
+```
+
+## `brms::pp_check()` is not useful when changing scales
+
+```{r pp_check-2}
+y_rep <- posterior_predict(M1)
+n_sims <- nrow(y_rep)
+subset <- sample(n_sims, 100)
+bayesplot::ppc_dens_overlay(log10(roaches$y+1), log10(y_rep[subset,]+1))
+```
+
+## Check the prediction for finding zero roaches
+
+```{r pp_zero}
+test_stat_zero <- function(y) mean(y == 0)
+pp_check(M1, type = "stat", stat = test_stat_zero)
+```
+
+## Logistic-binomial model
+
+```{r logistic-binomial}
+N <- 100
+height <- rnorm(N, 72, 3)
+p <- 0.4 + 0.1*(height - 72)/3
+n <- rep(20, N)
+y <- rbinom(N, n, p)
+
+df_logit_binom <- tibble(
+  n = n, 
+  y = y, 
+  height = height
+)
+
+M2 <- brm(
+  y | trials(n) ~ height, 
+  family = binomial(link="logit"),
+  data = df_logit_binom,
+  refresh = 0,
+  file = here::here("Ch15", "m2_logit_binom.rds")
+) 
+
+print(M2)
+```
+
+## Beta-binomial model
+
+```{r beta-binomial}
+df_logit_binom <- model.frame(M2) |> 
+  as_tibble() |> 
+  mutate(n = as.integer(n))
+
+M2_1 <- brm(
+  y | trials(n) ~ height, 
+  family = beta_binomial(link = "logit", link_phi = "log"),
+  data = df_logit_binom,
+  refresh = 0,
+  file = here::here("Ch15", "m2_1_beta_binom.rds")
+)
+
+print(M2_1)
+```
+
+## Ordinal regression
+
+![](ordinal_regression_paper.png)
+
+## Load Storable
+
+First, load data
+
+```{r load-storable}
+data_2player <- here::here("Examples", "Storable", "data", "2playergames.csv") |> 
+  read_csv()
+
+data_401 <- data_2player |>
+  filter(person == 401)
+
+print(data_401)
+```
+
+## Fit cumulative logit model
+
+```{r fit-cumul-logit}
+M3 <- brm(
+  vote ~ value, 
+  family = cumulative(link = "logit"),
+  data = data_401,
+  refresh = 0,
+  file = here::here("Ch15", "m3_ordered_cat.rds")
+  )
+
+print(M3)
+```
+
+## `pp_check`
+
+According to the textbook,
+
+$$
+E(y|x) = 1 * \Pr(y = 1 | x) + 2 * \Pr(y = 2 | x) + 3 * \Pr(y = 3 | x)
+$$
+
+```{r pp_check-cumul-logit-1}
+pe3 <- M3 |> 
+  tidybayes::epred_draws(
+    newdata = tibble(
+      value = 1:100
+    )
+  )
+
+pe3_sum <- pe3 |> 
+  ungroup() |> 
+  group_by(value, .draw) |> 
+  mutate(
+    .category = as.numeric(.category),
+    sum_epred = .category * .epred
+    ) |> 
+  summarise(sum_epred = sum(sum_epred))
+```
+
+## `pp_check`
+
+```{r pp_check-cumul-logit-2}
+pe3_sum |>
+  ggplot(aes(x = value, y = sum_epred)) +
+  tidybayes::stat_lineribbon() +
+  geom_point(aes(x = value, y = vote), data = data_401) +
+  scale_fill_brewer(palette = "Blues") + 
+  labs(x = "Value", y = "Vote",
+       fill = "Credible interval")
+```
+
+## Reading materials
+
+* ["Ordinal Regression" by Michael Betancourt](https://betanalpha.github.io/assets/case_studies/ordinal_regression.html)
